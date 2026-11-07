@@ -108,16 +108,24 @@ def ask_ai(theme: str, today: datetime.date, recent: list[str]) -> dict:
         )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
-                data = json.load(response)
+                raw = response.read().decode(errors="replace")
+                status = response.status
         except urllib.error.HTTPError as error:
             last_error = f"{model}: {error.code} {error.read().decode(errors='replace')[:300]}"
             print(f"::warning::{last_error}")
             continue
-        content = data["choices"][0]["message"]["content"].strip()
-        content = content.removeprefix("```json").removeprefix("```").removesuffix("```")
-        result = json.loads(content)
+        try:
+            data = json.loads(raw)
+            content = data["choices"][0]["message"]["content"].strip()
+            content = content.removeprefix("```json").removeprefix("```").removesuffix("```")
+            result = json.loads(content)
+            post, image_text = result["post"].strip(), result["image_text"].strip()
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            last_error = f"{model}: {status} 予想外の返事: {raw[:300]!r}"
+            print(f"::warning::{last_error}")
+            continue
         print(f"使ったAI: {model}")
-        return {"post": result["post"].strip(), "image_text": result["image_text"].strip()}
+        return {"post": post, "image_text": image_text}
     raise RuntimeError(f"AIで文章を作れませんでした: {last_error}")
 
 
