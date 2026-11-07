@@ -1,22 +1,19 @@
-name: 毎日Xに投稿
+name: 毎日の投稿の下書きを作る
 
 on:
   schedule:
-    # 毎日 23:07 (UTC) = 日本時間の朝 8:07
+    # 毎日 22:07 (UTC) = 日本時間の朝 7:07
     # GitHub が混んでいると、数分〜数十分遅れることがあります
-    - cron: "7 23 * * *"
+    - cron: "7 22 * * *"
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "テスト実行（チェックすると投稿せずに内容だけ表示）"
-        type: boolean
-        default: true
 
 permissions:
-  contents: read
+  contents: write  # 作った文章と画像を posts/ に保存するため
+  issues: write    # 下書きを Issue にして通知するため
+  models: read     # GitHub Models（無料のAI）を使うため
 
 jobs:
-  post:
+  draft:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,14 +22,36 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 必要なライブラリをインストール
-        run: pip install -r requirements.txt
+      - name: 日本語フォントとライブラリをインストール
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          pip install -r requirements.txt
 
-      - name: Xに投稿
+      - name: 文章と画像を作る
         env:
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
-        run: python post_to_x.py
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_URL_BASE: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/posts/
+        run: python make_post.py
+
+      - name: 文章と画像を保存する
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posts/
+          git commit -m "今日の投稿の下書き: $(TZ=Asia/Tokyo date +%F)"
+          git push
+
+      - name: Issue で通知する
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LABEL: 毎日の投稿
+        run: |
+          gh label create "$LABEL" --color 1D9BF0 --force
+          # 前の日の下書きが残っていたら閉じる
+          gh issue list --label "$LABEL" --state open --json number --jq '.[].number' \
+            | xargs -r -n1 gh issue close
+          title="今日の投稿 $(TZ=Asia/Tokyo date +%-m月%-d日)"
+          gh issue create --title "$title" --body-file issue_body.md --label "$LABEL" \
+              --assignee "${{ github.repository_owner }}" \
+            || gh issue create --title "$title" --body-file issue_body.md --label "$LABEL"
