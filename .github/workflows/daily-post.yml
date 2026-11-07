@@ -1,0 +1,38 @@
+name: 毎日Xに投稿
+
+on:
+  schedule:
+    # 毎日 23:07 (UTC) = 日本時間の朝 8:07
+    # GitHub が混んでいると、数分〜数十分遅れることがあります
+    - cron: "7 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "テスト実行（チェックすると投稿せずに内容だけ表示）"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 必要なライブラリをインストール
+        run: pip install -r requirements.txt
+
+      - name: Xに投稿
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+        run: python post_to_x.py
