@@ -2,9 +2,9 @@ name: 毎日の投稿の下書きを作る
 
 on:
   schedule:
-    # 毎日 22:07 (UTC) = 日本時間の朝 7:07
+    # 毎日 11:07 (UTC) = 日本時間の夜 20:07
     # GitHub が混んでいると、数分〜数十分遅れることがあります
-    - cron: "7 22 * * *"
+    - cron: "7 11 * * *"
   workflow_dispatch:
 
 permissions:
